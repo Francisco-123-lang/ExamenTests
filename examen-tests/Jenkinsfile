@@ -1,25 +1,54 @@
 pipeline {
     agent any
+
     tools {
         jdk   'Java-21'
         maven 'Maven'
     }
+
+    environment {
+        APP_NAME   = 'mi-app-java'
+        MAVEN_OPTS = '-Xmx1024m -XX:MaxMetaspaceSize=512m'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
     stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                echo "Rama:   ${GIT_BRANCH}"
+                echo "Commit: ${GIT_COMMIT}"
+                sh 'java -version'
+                sh 'mvn -version'
+            }
+        }
+
         stage('Compilar') {
             steps {
-                // Obligamos a Jenkins a entrar en la carpeta del proyecto
-                dir('examen-tests') { 
+                dir('examen-tests') {
                     sh 'mvn clean compile'
                 }
             }
         }
+
         stage('Tests') {
             steps {
                 dir('examen-tests') {
                     sh 'mvn test'
                 }
             }
+            post {
+                always {
+                    // Buscamos los reportes dentro de la subcarpeta
+                    junit 'examen-tests/target/surefire-reports/*.xml'
+                }
+            }
         }
+
         stage('Empaquetar') {
             steps {
                 dir('examen-tests') {
@@ -29,8 +58,16 @@ pipeline {
             }
         }
     }
+
     post {
-        failure { echo '❌ Build fallido' }
-        always { cleanWs() }
+        success {
+            echo '✅ Build completado con éxito'
+        }
+        failure {
+            echo '❌ Build fallido'
+        }
+        always {
+            cleanWs()
+        }
     }
 }
